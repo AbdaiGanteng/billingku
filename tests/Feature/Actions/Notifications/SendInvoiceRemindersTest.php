@@ -91,6 +91,18 @@ it('memakai jumlah hari pengingat dari pengaturan', function () {
     expect(remindersByInvoice())->toBe([$dueInFiveDays->id => MessageTemplateKey::ReminderBeforeDue]);
 });
 
+it('tidak mengirim pengingat yang terlewat secara susulan (tanpa catch-up)', function () {
+    $customer = customerOnProfile(Customer::factory()->active());
+    // Hari ini 2026-10-09: H-3 seharusnya 2026-10-06 dan jatuh tempo kemarin 2026-10-08 sudah lewat.
+    invoiceDueAt($customer, '2026-10-06', InvoiceStatus::Unpaid);
+    invoiceDueAt($customer, '2026-10-08', InvoiceStatus::Overdue);
+
+    $result = app(SendInvoiceReminders::class)->handle(today());
+
+    expect(MessageLog::query()->count())->toBe(0)
+        ->and($result)->toMatchArray(['queued' => 0, 'skipped' => 0, 'failed' => 0]);
+});
+
 it('melanjutkan invoice lain dan melaporkan invoice yang gagal dijadwalkan', function () {
     $customer = customerOnProfile(Customer::factory()->active());
     $failing = invoiceDueAt($customer, '2026-10-12', InvoiceStatus::Unpaid);

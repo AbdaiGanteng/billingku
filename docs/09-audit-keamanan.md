@@ -21,14 +21,14 @@ Status: ✅ diperbaiki (Tahap 10, atau Tahap 11 bila disebut) · ⏳ ditunda (ta
 | T-1 | Tinggi | Webhook publik menyimpan payload berukuran bebas sebelum signature diverifikasi | ✅ |
 | S-1 | Sedang | Signature Midtrans tidak mengikat `transaction_status`; `status_code` tidak dicocokkan | ✅ |
 | S-2 | Sedang | `retry_after` queue (90 s) lebih pendek dari `$timeout` job router (100 s) | ✅ |
-| S-3 | Sedang | Rate limit halaman publik per IP, padahal pelanggan berbagi IP NAT ISP | ⏳ keputusan |
-| S-4 | Sedang | Kegagalan job/webhook/WA hanya terlihat di log | ✅ Tahap 11 (`billing:health`); indikator dashboard ⏳ |
+| S-3 | Sedang | Rate limit halaman publik per IP, padahal pelanggan berbagi IP NAT ISP | ✅ allowlist IP opsional |
+| S-4 | Sedang | Kegagalan job/webhook/WA hanya terlihat di log | ✅ `billing:health` + indikator dashboard admin |
 | S-5 | Sedang | Jadwal pembersihan data lama di docs/02 belum dibuat | ✅ |
 | R-1 | Rendah | `npm audit`: `shell-quote` (critical) lewat `concurrently` di `dependencies` | ✅ |
 | R-2 | Rendah | Tanpa header keamanan (frame, referrer, sniffing) | ✅ |
 | R-3 | Rendah | Shared prop `auth.user` mengirim model User utuh | ✅ F00 |
 | R-4 | Rendah | `customers.network_error` dan activity log memuat `host:port` router, terlihat kasir/teknisi | ✅ |
-| R-5 | Rendah | 2FA tidak diwajibkan untuk admin; CSP belum dipasang | ⏳ keputusan (F09) |
+| R-5 | Rendah | 2FA tidak diwajibkan untuk admin; CSP belum dipasang | ✅ CSP dipasang; 2FA wajib opsional (`REQUIRE_ADMIN_TWO_FACTOR`) |
 | R-6 | Rendah | Lock QRIS 60 s bisa habis sebelum panggilan gateway beruntun selesai | 📝 |
 | R-7 | Rendah | Panggilan router sinkron (status koneksi, tes koneksi) tanpa throttle | 📝 |
 | R-8 | Rendah | Cek tagihan `/isolir` bisa ditebak terdistribusi; `kode`/`hp` di query string | 📝 |
@@ -88,7 +88,7 @@ Tidak ada temuan **Kritis**.
 - **Test:** `ConfigTest` — "memberi retry_after queue lebih lama dari timeout setiap job"
   (memeriksa semua kelas di `app/Jobs`, termasuk job baru kelak).
 
-### S-3 — Rate limit per IP di halaman publik (Sedang) ⏳
+### S-3 — Rate limit per IP di halaman publik (Sedang) ✅
 
 - **Lokasi:** `AppServiceProvider::isolationPageLimits()`, limiter `public-invoice`.
 - **Masalah:** pelanggan ISP umumnya keluar lewat NAT dengan IP publik yang sama. Semua
@@ -96,9 +96,14 @@ Tidak ada temuan **Kritis**.
   pelanggan sungguhan bisa mendapat 429 tepat saat ingin membayar.
 - **Usulan:** (a) daftar IP NAT ISP di `.env` yang dikecualikan dari limit per IP (limit per
   kode pelanggan tetap berlaku), (b) menaikkan batas tampilan, atau (c) diterima.
-- **Status:** menunggu keputusan pemilik usaha (bergantung topologi jaringan).
+- **Perbaikan:** usulan (a) dipasang. `PUBLIC_RATE_LIMIT_ALLOWLIST` (daftar IP dipisah koma,
+  `config/security.php`) mengecualikan IP tersebut dari batas tampilan `/isolir` dan halaman
+  tagihan serta batas cek per IP; batas anti-tebak per kode pelanggan (10/jam) tetap berlaku
+  untuk semua. Default kosong (perilaku lama) sampai pemilik mengisi IP NAT ISP-nya.
+- **Test:** `IsolationPageTest` (IP allowlist tidak dibatasi tampilannya, tetapi tetap dibatasi
+  per kode).
 
-### S-4 — Kegagalan tidak terlihat admin (Sedang) ✅ Tahap 11
+### S-4 — Kegagalan tidak terlihat admin (Sedang) ✅
 
 - **Lokasi:** `ReportService::dashboardSummary()`.
 - **Masalah:** dashboard menampilkan galat router (`network_error_at`) dan pembayaran
@@ -112,8 +117,13 @@ Tidak ada temuan **Kritis**.
   yang belum diproses lebih dari 15 menit (gagal), `failed_jobs`, pesan WA `failed` 24 jam dan
   `queued` lebih dari 2 jam (peringatan); masalah ditulis ke log dan `/up` membalas 500 bila
   database/Redis mati (docs/10 bagian 8). Rekonsiliasi gagal tetap hanya di log.
-- **Sisa:** indikator di dashboard admin dan notifikasi WA ke admin ditunda ke fase frontend.
-- **Test:** `HealthCheckerTest`, `HealthCommandTest`, `HealthEndpointTest`.
+- **Perbaikan (lanjutan):** dashboard admin kini menampilkan bagian "Kesehatan sistem" dari
+  `HealthChecker::summarize()` (notifikasi pembayaran tertahan, pesan WA gagal/tertahan, dan
+  `failed_jobs`) sebagai prop deferred; hanya status `fail`/`warning` yang ditampilkan sehingga
+  kosong saat sehat. Prop hanya dikirim untuk admin.
+- **Sisa:** notifikasi WA ke admin (push) belum ada; rekonsiliasi gagal masih hanya di log.
+- **Test:** `HealthCheckerTest`, `HealthCommandTest`, `HealthEndpointTest`, `DashboardTest`
+  (indikator kesehatan di-defer, hanya admin, kosong saat sehat).
 
 ### S-5 — Pembersihan data lama belum dijadwalkan (Sedang) ✅
 
@@ -170,21 +180,28 @@ dijangkau (Router Pusat).`). `HandlesRouterFailures` memakai ringkasan ini untuk
 masuk log aplikasi. Hasil tes koneksi untuk admin tetap menampilkan detail.
 **Test:** `MikrotikNetworkControllerTest`, `NetworkJobsTest`.
 
-### R-5 — 2FA admin tidak wajib, CSP belum dipasang (Rendah) ⏳ keputusan
+### R-5 — 2FA admin tidak wajib, CSP belum dipasang (Rendah) ✅
 
-Admin mengendalikan pengaturan, router, dan pembatalan tagihan. Pertimbangkan mewajibkan 2FA
-(middleware yang mengarahkan admin tanpa 2FA ke halaman keamanan).
+Admin mengendalikan pengaturan, router, dan pembatalan tagihan.
 
-F09 sengaja tidak mengerjakan keduanya (keputusan 2026-10-09):
+Keduanya kini dipasang (menggantikan keputusan tunda F09 2026-10-09):
 
-- **2FA wajib** adalah keputusan kebijakan pemilik usaha: admin yang belum menyiapkan aplikasi
-  authenticator akan terkunci dari halaman admin. 2FA dan passkey sudah tersedia secara opsional
-  di Pengaturan → Keamanan.
-- **CSP** butuh nonce untuk skrip inline di `app.blade.php` (tema) dan halaman publik Blade
-  (QRIS + polling, cek tagihan), `Vite::useCspNonce()`, serta `style-src 'unsafe-inline'` untuk
-  style inline Recharts dan halaman publik. Risiko utama yang ditutup CSP (XSS) sudah ditekan
-  oleh escaping React/Blade dan tidak adanya HTML dari pengguna; header frame, sniffing, dan
-  referrer sudah dipasang (R-2).
+- **2FA wajib** opsional lewat `REQUIRE_ADMIN_TWO_FACTOR` (`config/security.php`, default
+  nonaktif agar admin pertama tidak terkunci sebelum menyiapkan authenticator). Saat aktif,
+  middleware `EnsureAdminTwoFactorEnabled` (grup `web`, setelah `EnsureUserIsActive`)
+  mengarahkan admin tanpa 2FA terkonfirmasi ke Pengaturan → Keamanan. Jalur yang dibutuhkan
+  untuk mengaktifkan 2FA (`/user/*` Fortify, `settings/security`, `settings/password`), keluar,
+  dan masuk tetap diizinkan agar admin tidak terkunci; permintaan JSON dibalas 403. 2FA dan
+  passkey tetap tersedia opsional untuk semua role.
+- **CSP** dipasang di `AddSecurityHeaders` dan dikonfigurasi di `config/security.php`
+  (`CSP_ENABLED` default aktif, `CSP_REPORT_ONLY` untuk uji coba). Kebijakan: `default-src
+  'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri`/`form-action 'self'`,
+  `img-src`/`font-src 'self' data:`. `style-src 'self' 'unsafe-inline'` karena Recharts dan
+  beberapa komponen UI memasang style inline; `script-src 'self'` di production (built asset
+  eksternal, tanpa `unsafe-inline`/`unsafe-eval`), diperlonggar untuk host dev Vite + HMR di
+  luar production. Risiko XSS yang tersisa sudah ditekan oleh escaping React/Blade.
+- **Test:** `SecurityHeadersTest` (CSP, report-only, toggle),
+  `EnsureAdminTwoFactorEnabledTest`.
 
 ### R-6 — Lock charge QRIS bisa habis (Rendah) 📝
 

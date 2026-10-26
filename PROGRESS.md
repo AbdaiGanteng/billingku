@@ -191,20 +191,17 @@ Hal yang sengaja ditunda untuk dikerjakan nanti.
 - Status pengiriman akhir Fonnte (terkirim/gagal di sisi WhatsApp) hanya tersedia lewat webhook Fonnte; v1 menganggap `status: true` (masuk antrean Fonnte) sebagai `sent`.
 - Pesan ganda masih mungkin jika request ke Fonnte timeout setelah pesan diterima lalu job mencoba ulang (risiko diterima, lihat W6).
 - Uji manual ke Fonnte sungguhan dan tampilan halaman tagihan di HP (QR Midtrans sandbox, polling) belum dilakukan; implementasi baru diuji dengan fake.
-- `NotImplementedException` tidak dipakai lagi setelah stub terakhir diimplementasikan; bisa dihapus.
-- `.env` lokal belum berisi `WHATSAPP_DRIVER`; default `fonnte` tanpa token membuat setiap pesan tercatat `failed`. Untuk development set `WHATSAPP_DRIVER=log`.
+- `.env` lokal belum berisi `WHATSAPP_DRIVER`; default `fonnte` tanpa token membuat setiap pesan tercatat `failed`. Untuk development set `WHATSAPP_DRIVER=log` (komentar `.env.example` sudah menjelaskan ini).
 - Laporan pergerakan pelanggan hanya mengenal kejadian yang tercatat di `activity_logs`; data `DemoSeeder` dan data migrasi lama tidak muncul. Jika perlu, seeder demo bisa dibuat lewat Action.
 - Ekspor tunggakan diurutkan menurut ID invoice (bukan umur) karena `lazyById`; urutkan di spreadsheet bila perlu.
 - `MarkOverdueInvoices` memakai query update massal (tanpa event `saved`) sehingga tidak menghapus cache dashboard; tidak berpengaruh karena definisi tunggakan sudah memakai `due_at`, bukan status `overdue`.
 - `php artisan wayfinder:generate` manual wajib memakai `--with-form` (plugin Vite memakai `formVariants: true`); tanpa itu `.form()` hilang dan `types:check` gagal.
 - Login passkey tidak melewati `Fortify::authenticateUsing`; akun nonaktif yang masuk lewat passkey baru dikeluarkan `EnsureUserIsActive` pada request berikutnya (tidak bisa membuka halaman apa pun).
 - `customers/show` hanya memuat 24 tagihan/pembayaran/pesan/aktivitas terbaru; riwayat lengkap lewat `/invoices?customer_id=` dan `/payments?customer_id=` (pesan dan aktivitas belum punya halaman riwayat lengkap).
-- S-3 (audit): rate limit `/isolir` dan halaman tagihan per IP bisa dipakai bersama seluruh pelanggan di balik NAT ISP; perlu keputusan (allowlist IP NAT di `.env`, naikkan batas, atau terima).
-- S-4 (audit, sisa): `billing:health` sudah mencatat kegagalan ke log; indikator di dashboard admin (WA gagal, notifikasi pembayaran tertahan, `failed_jobs`) dan alert WA ke admin belum ada. Rekonsiliasi pembayaran yang gagal masih hanya di log.
 - Deploy (Tahap 11): konfigurasi `deploy/` dan `docs/10-deploy.md` belum diuji di VPS sungguhan; `shellcheck` tidak tersedia di mesin pengembang (hanya `bash -n`); workflow CI baru berjalan setelah di-push. Bit executable script tidak tercatat dari Windows, sehingga script dipanggil lewat `bash`.
-- R-5 (audit, keputusan F19): 2FA wajib untuk admin dan CSP belum dipasang.
 - R-6/R-7 (audit): lock charge QRIS 60 s bisa habis pada panggilan gateway beruntun; panggilan router sinkron (status koneksi, tes koneksi) belum di-throttle.
-- Test yang belum ada (docs/09 butir 9): QRIS untuk invoice pelanggan `terminated`, limit `/isolir` dan halaman tagihan per IP, pengingat terlewat tidak dikirim belakangan, isolir ulang tanpa pesan kedua.
+- Sisa S-4: alert WhatsApp ke admin (push) dan indikator rekonsiliasi pembayaran yang gagal belum ada; indikator dashboard admin sudah dibuat (lihat "Perbaikan lanjutan").
+- Riwayat pesan WhatsApp dan activity log lengkap belum punya halaman sendiri (tagihan/pembayaran sudah). `customers/show` tetap memuat 24 entri terbaru.
 - F03: alur simpan pelanggan baru belum dicoba di browser (halaman tujuan `customers/show` sudah ada sejak F04).
 - F04: detail pelanggan sebagai kasir/teknisi baru diuji lewat feature test, belum di browser.
 - F09: audit tampilan di lebar 360 px (semua halaman, terang dan gelap) belum dilakukan di browser: jendela Chrome tidak bisa diperkecil dari 1536 px, iframe ditolak `X-Frame-Options: DENY`, dan mengubah header itu sementara ditolak pengaman otomatis. Audit statis F09 sudah memeriksa judul tab, empty state, skeleton, `inputMode`, label aria, warna token, target sentuh, dan tabel → kartu di bawah `md`. Periksa lewat DevTools mode perangkat atau HP; "Pakai lokasi saya" belum dicoba di HP lewat HTTPS.
@@ -214,3 +211,22 @@ Hal yang sengaja ditunda untuk dikerjakan nanti.
 - F07: halaman laporan dan tunggakan belum diperiksa di 360 px (grafik 12 batang di layar sempit perlu dilihat) dan daftar tunggakan berisi data belum dicoba di browser karena database development tidak punya tunggakan (baris diuji lewat feature test). Input tanggal periode tampil dalam format locale browser (`10/01/2026` di Chrome berbahasa Inggris), sama seperti filter tanggal pembayaran.
 - F08: halaman pengguna dan pengaturan belum diperiksa di 360 px, dan menu pengaturan sebagai kasir/teknisi (hanya grup Akun) belum dicoba di browser. Penolakan unggah logo (bukan gambar, > 1 MB) hanya diuji lewat feature test. Pemeriksaan `ConfirmDialog` di dalam `<form>` (pola bug logo) sudah dilakukan di F09: tidak ada.
 - Symlink `public/storage` lokal sempat menunjuk ke folder lama `backend/` (sudah dibuat ulang saat F08); jalankan `php artisan storage:link` setelah clone atau pindah folder.
+
+## Perbaikan lanjutan (pasca-F09)
+
+Pengerjaan utang teknis yang tidak membutuhkan sistem eksternal (router/WA/VPS sungguhan).
+
+| Tanggal | Perbaikan | Catatan |
+|---|---|---|
+| 2026-10-14 | S-4 indikator kesehatan di dashboard admin | `HealthChecker::summarize()` baru (notifikasi pembayaran tertahan, pesan WA gagal/tertahan, `failed_jobs`; tanpa panggilan router). `DashboardController` mengirim prop `health` sebagai `Inertia::defer` hanya untuk admin; hanya status `fail`/`warning` yang ditampilkan sehingga kosong saat sehat. `dashboard.tsx` menampilkan bagian "Kesehatan sistem" dengan skeleton saat memuat. Sisa: alert WA ke admin dan rekonsiliasi gagal belum ada. Test di `DashboardTest`. |
+| 2026-10-14 | S-3 allowlist IP NAT untuk rate limit publik | `config/security.php` + `PUBLIC_RATE_LIMIT_ALLOWLIST` (daftar IP dipisah koma, default kosong = perilaku lama). IP di daftar dikecualikan dari batas tampilan `/isolir`/halaman tagihan dan batas cek per IP; batas anti-tebak per kode pelanggan tetap berlaku. Test di `IsolationPageTest`. |
+| 2026-10-14 | R-5 Content Security Policy | `AddSecurityHeaders` memasang CSP (`CSP_ENABLED` default aktif, `CSP_REPORT_ONLY` opsional). Skrip inline (`app.blade.php` tema, halaman tagihan publik polling QRIS) dan tag Vite/Inertia dibolehkan lewat nonce per request (`Vite::useCspNonce()`); `style-src 'unsafe-inline'` untuk Recharts. `script-src 'self'`+nonce di production, diperlonggar untuk host dev Vite + HMR di luar production. Test di `SecurityHeadersTest` + `PublicInvoicePageTest` (nonce). |
+| 2026-10-14 | R-5 2FA wajib admin (opsional) | `REQUIRE_ADMIN_TWO_FACTOR` (default nonaktif agar admin pertama tidak terkunci). Middleware `EnsureAdminTwoFactorEnabled` (grup `web`) mengarahkan admin tanpa 2FA terkonfirmasi ke Pengaturan → Keamanan; jalur pengaktifan 2FA, keluar, dan masuk tetap diizinkan; permintaan JSON dibalas 403. Test di `EnsureAdminTwoFactorEnabledTest`. |
+| 2026-10-14 | Test docs/09 butir 9 | Ditambah: QRIS untuk tagihan terbuka pelanggan `terminated` dan batas tampilan halaman tagihan per IP (`PublicInvoicePageTest`); pengingat terlewat tidak dikirim susulan (`SendInvoiceRemindersTest`). "Isolir ulang tanpa pesan kedua" sudah tercakup `IsolateCustomerTest` (overdue→manual tidak push notifikasi) + `IsolateOverdueCustomers` hanya menyasar pelanggan `active`. |
+| 2026-10-14 | Kebersihan | `app/Exceptions/NotImplementedException.php` dihapus (tidak dipakai). Komentar `WHATSAPP_DRIVER` di `.env.example` diperjelas (fonnte produksi / log development). |
+
+> **Catatan verifikasi:** perubahan di atas dibuat di mesin dengan PHP 8.3 (proyek butuh 8.4) tanpa
+> `vendor/` terpasang, sehingga Pint, PHPStan, dan Pest **belum dijalankan**. Yang sudah diverifikasi:
+> `php -l` (sintaks) untuk semua file PHP, `npx tsc --noEmit` (perubahan frontend tidak menambah
+> error; satu-satunya error adalah modul `@/routes` hasil Wayfinder yang perlu `php artisan`
+> dengan PHP 8.4). Jalankan `composer ci:check` di lingkungan PHP 8.4 sebelum commit.

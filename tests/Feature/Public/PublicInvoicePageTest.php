@@ -171,6 +171,50 @@ it('membatasi permintaan QRIS per IP dan invoice', function () {
     $this->postJson(InvoicePaymentLink::pay($invoice))->assertTooManyRequests();
 });
 
+it('memberi nonce CSP pada skrip inline halaman tagihan agar tidak terblokir CSP', function () {
+    config()->set('security.csp.enabled', true);
+    $invoice = publicInvoice();
+
+    $response = $this->get(InvoicePaymentLink::for($invoice));
+
+    $response->assertOk();
+    $csp = $response->headers->get('Content-Security-Policy');
+    expect($csp)->toContain('script-src')
+        ->and($csp)->toMatch('/script-src[^;]*nonce-/')
+        ->and($response->getContent())->toContain('<script nonce=');
+});
+
+it('membatasi tampilan halaman tagihan per IP', function () {
+    $invoice = publicInvoice();
+    $link = InvoicePaymentLink::for($invoice);
+
+    for ($i = 0; $i < AppServiceProvider::PUBLIC_INVOICE_VIEWS_PER_MINUTE; $i++) {
+        $this->get($link)->assertOk();
+    }
+
+    $this->get($link)->assertTooManyRequests();
+});
+
+it('tetap melayani halaman dan charge QRIS untuk tagihan terbuka pelanggan yang sudah berhenti', function () {
+    $gateway = fakeGateway();
+    $customer = customerOnProfile(Customer::factory()->terminated()->state([
+        'code' => 'PLG-000500',
+        'name' => 'Mantan Pelanggan',
+        'phone' => '6281200009999',
+    ]));
+    $invoice = invoiceDueAt($customer, '2026-10-12', InvoiceStatus::Unpaid);
+
+    $this->get(InvoicePaymentLink::for($invoice))
+        ->assertOk()
+        ->assertSee($invoice->number)
+        ->assertSee('Tampilkan kode QRIS');
+
+    $this->postJson(InvoicePaymentLink::pay($invoice))
+        ->assertOk()
+        ->assertJsonPath('charge.status', 'pending');
+    $gateway->assertCalled('createQrisCharge', 1);
+});
+
 it('meng-escape nama pelanggan yang ditampilkan', function () {
     $invoice = publicInvoice();
     $invoice->customer->update(['name' => '<script>alert(1)</script>']);

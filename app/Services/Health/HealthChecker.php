@@ -69,6 +69,22 @@ final class HealthChecker
     }
 
     /**
+     * Indikator ringkas untuk dashboard admin: hanya pemeriksaan yang menandakan uang atau
+     * notifikasi tertahan dan bisa ditindak admin tanpa membuka terminal. Panggilan router dan
+     * checklist .env production sengaja dilewati karena berat (TCP) atau tidak relevan di layar.
+     *
+     * @return list<HealthCheckResult>
+     */
+    public function summarize(): array
+    {
+        return [
+            $this->guard('Notifikasi pembayaran', $this->checkPaymentNotifications(...)),
+            $this->guard('Pesan WhatsApp', $this->checkWhatsappMessages(...)),
+            $this->guard('Job gagal', $this->checkFailedJobs(...)),
+        ];
+    }
+
+    /**
      * Pemeriksaan cepat untuk `/up` (tanpa router dan query bisnis).
      *
      * @throws Throwable database atau Redis tidak bisa dipakai

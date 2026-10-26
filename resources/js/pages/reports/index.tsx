@@ -1,13 +1,13 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import type { LucideIcon } from 'lucide-react';
 import {
-    BarChart3,
+    ChartNoAxesCombined,
     ChevronLeft,
     ChevronRight,
     Download,
-    ShieldOff,
     UserPlus,
-    UserX,
+    UserRoundX,
+    WifiOff,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { DataTableColumn } from '@/components/data-table';
@@ -82,13 +82,13 @@ const movementCards: {
         key: 'terminated_customers',
         title: 'Berhenti',
         description: 'Diberhentikan di dalam periode',
-        icon: UserX,
+        icon: UserRoundX,
     },
     {
         key: 'isolated_customers',
         title: 'Terisolir',
         description: 'Diisolir dari status aktif',
-        icon: ShieldOff,
+        icon: WifiOff,
     },
 ];
 
@@ -240,7 +240,7 @@ export default function ReportsIndex({
                                 />
                             ) : (
                                 <EmptyState
-                                    icon={BarChart3}
+                                    icon={ChartNoAxesCombined}
                                     title={`Belum ada pendapatan di tahun ${year}`}
                                     description="Pendapatan muncul setelah ada pembayaran yang tercatat."
                                 />

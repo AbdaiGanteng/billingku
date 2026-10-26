@@ -1,14 +1,14 @@
 import { Link } from '@inertiajs/react';
 import {
-    BarChart3,
-    FileText,
-    LayoutGrid,
-    Package,
-    Router,
+    ChartNoAxesCombined,
+    CreditCard,
+    Gauge,
+    LayoutDashboard,
+    Network,
+    ReceiptText,
     Settings,
     UserCog,
     Users,
-    Wallet,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
@@ -41,7 +41,7 @@ const navGroups: NavGroup[] = [
             {
                 title: 'Dashboard',
                 href: dashboard(),
-                icon: LayoutGrid,
+                icon: LayoutDashboard,
                 exact: true,
             },
         ],
@@ -58,13 +58,13 @@ const navGroups: NavGroup[] = [
             {
                 title: 'Tagihan',
                 href: invoicesIndex(),
-                icon: FileText,
+                icon: ReceiptText,
                 permission: 'invoices.view',
             },
             {
                 title: 'Pembayaran',
                 href: paymentsIndex(),
-                icon: Wallet,
+                icon: CreditCard,
                 permission: 'payments.view',
             },
         ],
@@ -75,13 +75,13 @@ const navGroups: NavGroup[] = [
             {
                 title: 'Paket',
                 href: packagesIndex(),
-                icon: Package,
+                icon: Gauge,
                 permission: 'packages.view',
             },
             {
                 title: 'Router',
                 href: routersIndex(),
-                icon: Router,
+                icon: Network,
                 permission: 'routers.manage',
             },
         ],
@@ -92,7 +92,7 @@ const navGroups: NavGroup[] = [
             {
                 title: 'Pendapatan & tunggakan',
                 href: reportsIndex(),
-                icon: BarChart3,
+                icon: ChartNoAxesCombined,
                 permission: 'reports.view',
             },
         ],
@@ -129,11 +129,19 @@ export function AppSidebar() {
         .filter((group) => group.items.length > 0);
 
     return (
-        <Sidebar collapsible="icon" variant="inset">
-            <SidebarHeader>
+        <Sidebar
+            collapsible="icon"
+            variant="inset"
+            className="[&_[data-sidebar=sidebar]]:rounded-2xl [&_[data-sidebar=sidebar]]:border [&_[data-sidebar=sidebar]]:border-white/40 [&_[data-sidebar=sidebar]]:bg-sidebar/80 [&_[data-sidebar=sidebar]]:shadow-sm [&_[data-sidebar=sidebar]]:backdrop-blur-xl dark:[&_[data-sidebar=sidebar]]:border-white/10"
+        >
+            <SidebarHeader className="border-b border-sidebar-border/60 bg-sidebar/55 p-2 backdrop-blur-xl">
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" asChild>
+                        <SidebarMenuButton
+                            size="lg"
+                            asChild
+                            className="rounded-xl transition-colors hover:bg-sidebar-accent/80 focus-visible:ring-2"
+                        >
                             <Link href={dashboard()} prefetch>
                                 <AppLogo />
                             </Link>
@@ -142,11 +150,11 @@ export function AppSidebar() {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <SidebarContent>
+            <SidebarContent className="bg-sidebar/35 px-1 py-2">
                 <NavMain groups={visibleGroups} />
             </SidebarContent>
 
-            <SidebarFooter>
+            <SidebarFooter className="border-t border-sidebar-border/60 bg-sidebar/55 p-2 backdrop-blur-xl [&_[data-sidebar=menu-button]]:rounded-xl">
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

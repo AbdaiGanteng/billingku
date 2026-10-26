@@ -82,6 +82,31 @@ it('membatasi percobaan cek tagihan per kode pelanggan', function () {
         ->assertTooManyRequests();
 });
 
+it('tidak membatasi tampilan halaman isolir untuk IP yang masuk allowlist NAT', function () {
+    config()->set('security.public_rate_limit_allowlist', ['203.0.113.5']);
+
+    for ($attempt = 0; $attempt <= AppServiceProvider::ISOLATION_PAGE_VIEWS_PER_MINUTE; $attempt++) {
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.5'])
+            ->get('/isolir')
+            ->assertOk();
+    }
+});
+
+it('tetap membatasi cek tagihan per kode meski IP masuk allowlist NAT', function () {
+    config()->set('security.public_rate_limit_allowlist', ['203.0.113.5']);
+    isolatedPageCustomer();
+
+    for ($attempt = 0; $attempt < AppServiceProvider::ISOLATION_LOOKUPS_PER_CODE_PER_HOUR; $attempt++) {
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.5'])
+            ->get('/isolir?kode=PLG-000123&hp='.str_pad((string) $attempt, 4, '0', STR_PAD_LEFT))
+            ->assertOk();
+    }
+
+    $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.5'])
+        ->get('/isolir?kode=PLG-000123&hp=7890')
+        ->assertTooManyRequests();
+});
+
 it('menampilkan kontak WhatsApp admin jika sudah diisi', function () {
     Setting::query()->create(['key' => 'business.whatsapp', 'value' => '0812-0000-1111']);
 

@@ -11,6 +11,7 @@ export default function StatCard({
     icon: Icon,
     href,
     className,
+    liftOnHover = false,
 }: {
     title: string;
     value: ReactNode;
@@ -18,6 +19,7 @@ export default function StatCard({
     icon?: LucideIcon;
     href?: NonNullable<InertiaLinkProps['href']>;
     className?: string;
+    liftOnHover?: boolean;
 }) {
     const content = (
         <>
@@ -26,10 +28,9 @@ export default function StatCard({
                     {title}
                 </p>
                 {Icon ? (
-                    <Icon
-                        className="size-4 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                    />
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Icon className="size-4" aria-hidden="true" />
+                    </span>
                 ) : null}
             </div>
             <div className="text-2xl font-semibold tracking-tight tabular-nums">
@@ -57,6 +58,8 @@ export default function StatCard({
             className={cn(
                 classes,
                 'transition-colors hover:border-primary/40 hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                liftOnHover &&
+                    'transition-[color,background-color,border-color,box-shadow,transform] duration-200 focus-visible:shadow-md motion-safe:hover:-translate-y-1 motion-safe:hover:shadow-md motion-safe:focus-visible:-translate-y-1 motion-reduce:transform-none motion-reduce:transition-none',
             )}
         >
             {content}

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use App\Enums\Role;
 use App\Models\Customer;
+use App\Models\MessageLog;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected to the login page', function () {
@@ -86,4 +88,34 @@ it('menampilkan jumlah pelanggan per status tanpa ringkasan keuangan untuk kasir
                 'terminated' => 0,
                 'network_error' => 1,
             ]));
+})->with([Role::Kasir, Role::Teknisi]);
+
+it('menunda indikator kesehatan dan menampilkannya hanya untuk admin', function () {
+    MessageLog::factory()->failed()->create(['updated_at' => now()]);
+
+    $this->actingAs(userWithRole(Role::Admin))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('dashboard', true)
+            ->missing('health')
+            ->loadDeferredProps(fn (Assert $reload) => $reload
+                ->has('health')
+                ->where('health', fn (Collection $alerts): bool => $alerts->contains(
+                    fn (array $alert): bool => $alert['name'] === 'Pesan WhatsApp' && $alert['status'] === 'warning',
+                ))));
+});
+
+it('mengembalikan daftar kesehatan kosong untuk admin saat tidak ada masalah', function () {
+    $this->actingAs(userWithRole(Role::Admin))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->loadDeferredProps(fn (Assert $reload) => $reload->where('health', [])));
+});
+
+it('tidak pernah mengirim indikator kesehatan ke kasir dan teknisi', function (Role $role) {
+    MessageLog::factory()->failed()->create(['updated_at' => now()]);
+
+    $this->actingAs(userWithRole($role))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page->where('health', null));
 })->with([Role::Kasir, Role::Teknisi]);

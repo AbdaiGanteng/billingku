@@ -28,6 +28,9 @@ export function NavMain({ groups }: { groups: NavGroup[] }) {
                                     asChild
                                     isActive={isActive(item)}
                                     tooltip={{ children: item.title }}
+                                    // Sidebar terang memakai abu untuk hover, jadi halaman aktif
+                                    // ditandai aksen primer agar tetap mudah dikenali.
+                                    className="h-10 rounded-xl px-3 transition-[background-color,color,box-shadow] duration-200 hover:bg-sidebar-accent/80 focus-visible:ring-2 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:shadow-sm data-[active=true]:hover:bg-primary/15 data-[active=true]:[&>svg]:text-primary"
                                 >
                                     <Link href={item.href} prefetch>
                                         {item.icon && <item.icon />}

@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
-        <script>
+        <script @cspNonce>
             (function() {
                 const appearance = '{{ $appearance ?? "system" }}';
 
@@ -19,14 +19,15 @@
             })();
         </script>
 
-        {{-- Inline style to set the HTML background color based on our theme in app.css --}}
+        {{-- Latar awal halaman; samakan dengan --sidebar di app.css (layout inset memakai warna
+             itu sebagai bingkai) agar tidak ada kedip warna sebelum CSS termuat. --}}
         <style>
             html {
-                background-color: oklch(0.98 0.004 255);
+                background-color: oklch(0.976 0.003 265);
             }
 
             html.dark {
-                background-color: oklch(0.17 0.02 260);
+                background-color: oklch(0.155 0.008 265);
             }
         </style>
 

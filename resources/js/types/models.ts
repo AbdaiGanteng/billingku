@@ -238,6 +238,17 @@ export type CustomerCounts = Record<CustomerStatus, number> & {
     network_error: number;
 };
 
+/** Status pemeriksaan kesehatan (`App\Enums\HealthStatus`); dashboard hanya menampilkan fail/warning. */
+export type HealthStatus = 'ok' | 'warning' | 'fail' | 'skipped';
+
+/** Satu indikator kesehatan untuk dashboard admin (`App\Data\HealthCheckResult`). */
+export type HealthAlert = {
+    name: string;
+    status: HealthStatus;
+    label: string;
+    message: string;
+};
+
 /** Pelanggan terpilih di filter daftar tagihan/pembayaran (prop `customer` `invoices/index` dan `payments/index`). */
 export type CustomerReference = {
     id: number;

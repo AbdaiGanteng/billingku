@@ -69,7 +69,7 @@
 
 @if ($isPayable)
     @push('scripts')
-        <script>
+        <script @cspNonce>
             (function () {
                 var payUrl = @json($payUrl);
                 var statusUrl = @json($statusUrl);

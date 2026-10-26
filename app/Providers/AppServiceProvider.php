@@ -36,11 +36,13 @@ use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Routing\Route;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -94,12 +96,30 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configureContentSecurityPolicy();
         $this->configureMorphMap();
         $this->configureAuthorization();
         $this->configureRateLimiting();
         $this->configureHealthCheck();
         $this->configurePublicViews();
         $this->configureErrorPages();
+    }
+
+    /**
+     * Satu nonce CSP per request dipakai bersama oleh tag Vite/Inertia (otomatis) dan skrip
+     * inline di Blade (`app.blade.php` tema, halaman tagihan publik). Middleware AddSecurityHeaders
+     * membaca nonce ini untuk directive `script-src`. Dipasang hanya saat CSP aktif agar tanpa CSP
+     * tidak ada atribut nonce yang tidak perlu.
+     */
+    protected function configureContentSecurityPolicy(): void
+    {
+        // Directive Blade `@cspNonce`: mencetak ` nonce="..."` untuk skrip inline bila CSP aktif,
+        // atau string kosong bila tidak, sehingga tag <script> tetap valid tanpa CSP.
+        Blade::directive('cspNonce', fn (): string => "<?php echo \\Illuminate\\Support\\Facades\\Vite::cspNonce() ? ' nonce=\"'.e(\\Illuminate\\Support\\Facades\\Vite::cspNonce()).'\"' : ''; ?>");
+
+        if (config('security.csp.enabled')) {
+            Vite::useCspNonce();
+        }
     }
 
     /**
@@ -188,11 +208,26 @@ class AppServiceProvider extends ServiceProvider
     {
         RateLimiter::for('webhooks', fn (Request $request): Limit => Limit::perMinute(self::WEBHOOK_RATE_LIMIT_PER_MINUTE)->by($request->ip()));
         RateLimiter::for('isolation-page', $this->isolationPageLimits(...));
-        RateLimiter::for('public-invoice', fn (Request $request): Limit => Limit::perMinute(self::PUBLIC_INVOICE_VIEWS_PER_MINUTE)->by($request->ip()));
+        RateLimiter::for('public-invoice', fn (Request $request): Limit => $this->isAllowlistedIp($request)
+            ? Limit::none()
+            : Limit::perMinute(self::PUBLIC_INVOICE_VIEWS_PER_MINUTE)->by($request->ip()));
         // Path memuat ID invoice; throttle berjalan sebelum route model binding.
-        RateLimiter::for('public-invoice-pay', fn (Request $request): Limit => Limit::perMinute(self::PUBLIC_INVOICE_PAYMENTS_PER_MINUTE)
-            ->by($request->ip().'|'.$request->path()));
+        RateLimiter::for('public-invoice-pay', fn (Request $request): Limit => $this->isAllowlistedIp($request)
+            ? Limit::none()
+            : Limit::perMinute(self::PUBLIC_INVOICE_PAYMENTS_PER_MINUTE)->by($request->ip().'|'.$request->path()));
         RateLimiter::for('whatsapp', $this->whatsappLimit(...));
+    }
+
+    /**
+     * IP di PUBLIC_RATE_LIMIT_ALLOWLIST (biasanya NAT ISP) dikecualikan dari batas tampilan halaman
+     * publik agar satu pelanggan sibuk tidak menghabiskan kuota pelanggan lain yang berbagi IP (S-3).
+     */
+    protected function isAllowlistedIp(Request $request): bool
+    {
+        /** @var list<string> $allowlist */
+        $allowlist = config('security.public_rate_limit_allowlist', []);
+
+        return $allowlist !== [] && in_array((string) $request->ip(), $allowlist, true);
     }
 
     /**
@@ -216,13 +251,19 @@ class AppServiceProvider extends ServiceProvider
     protected function isolationPageLimits(Request $request): Limit|array
     {
         $code = strtoupper($request->string('kode')->trim()->toString());
+        $allowlisted = $this->isAllowlistedIp($request);
 
         if ($code === '') {
-            return Limit::perMinute(self::ISOLATION_PAGE_VIEWS_PER_MINUTE)->by('view:'.$request->ip());
+            return $allowlisted
+                ? Limit::none()
+                : Limit::perMinute(self::ISOLATION_PAGE_VIEWS_PER_MINUTE)->by('view:'.$request->ip());
         }
 
+        // Batas per kode selalu berlaku (anti-tebak 4 digit nomor WA), bahkan untuk IP allowlist.
         return [
-            Limit::perMinute(self::ISOLATION_LOOKUPS_PER_MINUTE)->by('lookup-ip:'.$request->ip()),
+            $allowlisted
+                ? Limit::none()
+                : Limit::perMinute(self::ISOLATION_LOOKUPS_PER_MINUTE)->by('lookup-ip:'.$request->ip()),
             Limit::perHour(self::ISOLATION_LOOKUPS_PER_CODE_PER_HOUR)->by('lookup-code:'.$code),
         ];
     }
